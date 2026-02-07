@@ -5,13 +5,13 @@ import numpy as np
 import random
 
 class ChessPGNDataset(Dataset):
-    def __init__(self, pgn_file_path, move_map,  max_games=1000):
+    def __init__(self, pgn_file_path, move_map,  max_games=20000):
         self.move_map = move_map
         self.positions = [] 
         with open(pgn_file_path) as opened_file:
             self._load_data(opened_file, max_games)
 
-    def _load_data(self, file_handle, max_games=1000):
+    def _load_data(self, file_handle, max_games=20000):
         result_map = {"1-0": 1.0, "0-1": -1.0, "1/2-1/2": 0.0}
         for _ in range(max_games):
             game = chess.pgn.read_game(file_handle)

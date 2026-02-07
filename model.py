@@ -28,6 +28,10 @@ class ChessNet(nn.Module):
         )
         self.res_block1 = ResBlock(128)
         self.res_block2 = ResBlock(128)
+        self.res_block3 = ResBlock(128)
+        self.res_block4 = ResBlock(128)
+        self.res_block5 = ResBlock(128)
+        self.res_block6 = ResBlock(128)
 
 
         self.policy_head = nn.Sequential(
