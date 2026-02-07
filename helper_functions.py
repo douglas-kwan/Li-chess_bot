@@ -32,17 +32,18 @@ def create_input_for_nn(games):
     return np.array(X, dtype=np.float32), np.array(y)
 
 def create_move_map():
-    all_moves = []
-    for from_sq in range(64):
-        for to_sq in range(64):
-            all_moves.append(chess.Move(from_sq, to_sq).uci())
-            if to_sq >= 56 or to_sq <= 7: 
-                for promo in [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT]:
-                    all_moves.append(chess.Move(from_sq, to_sq, promotion=promo).uci())
+    all_moves = set()
     
-    return {move: i for i, move in enumerate(all_moves)}
-
-# MOVE_MAP = create_move_map()
+    for from_sq in chess.SQUARES:
+        for to_sq in chess.SQUARES:
+            all_moves.add(chess.Move(from_sq, to_sq).uci())
+            
+            if chess.square_rank(to_sq) in [0, 7]:
+                for promo in [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT]:
+                    all_moves.add(chess.Move(from_sq, to_sq, promotion=promo).uci())
+    
+    sorted_moves = sorted(list(all_moves))
+    return {move: i for i, move in enumerate(sorted_moves)}
 
 def sample_game_positions(game, num_samples=5):
     positions = []

@@ -12,17 +12,19 @@ class ChessPGNDataset(Dataset):
             self._load_data(opened_file, max_games)
 
     def _load_data(self, file_handle, max_games=1000):
+        result_map = {"1-0": 1.0, "0-1": -1.0, "1/2-1/2": 0.0}
         for _ in range(max_games):
             game = chess.pgn.read_game(file_handle)
             if game is None: break
-            sampled = self.sample_game_positions(game, num_samples=8)
+            game_result = result_map.get(game.headers.get("Result", "*"), 0.0)
+            sampled = self.sample_game_positions(game, game_result, num_samples=8)
             self.positions.extend(sampled)
     
-    def sample_game_positions(self, game, num_samples=8):
+    def sample_game_positions(self, game, result, num_samples=8):
         all_states = []
         board = game.board()
         for move in game.mainline_moves():
-            all_states.append((board.fen(), move, board.turn))
+            all_states.append((board.fen(), move, board.turn, result))
             board.push(move)
         return random.sample(all_states, min(len(all_states), num_samples))
 
@@ -30,9 +32,11 @@ class ChessPGNDataset(Dataset):
         return len(self.positions)
 
     def __getitem__(self, idx):
-        fen, move, turn = self.positions[idx]
+        fen, move, turn, result = self.positions[idx]
         board = chess.Board(fen)
         
+        current_value = result if turn == chess.WHITE else -result
+
         if turn == chess.BLACK:
             board = board.mirror()
             move = chess.Move(chess.square_mirror(move.from_square), 
@@ -42,7 +46,7 @@ class ChessPGNDataset(Dataset):
         tensor = self.board_to_tensor(board)
         move_idx = self.move_map.get(move.uci(), 0)
         
-        return torch.from_numpy(tensor).float(), torch.tensor(move_idx, dtype=torch.long)
+        return torch.from_numpy(tensor).float(), torch.tensor(move_idx, dtype=torch.long), torch.tensor(current_value, dtype=torch.float32).unsqueeze(0)
 
     def board_to_tensor(self, board):
         matrix = np.zeros((12, 8, 8), dtype=np.int8)
