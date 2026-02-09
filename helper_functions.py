@@ -3,6 +3,7 @@ from chess import Board
 import chess
 import random
 import chess.pgn
+import torch
 
 def board_to_matrix(board: Board):
     # 8x8 cause a chess board is 8x8
@@ -81,3 +82,75 @@ def fen_to_12_plane_matrix(fen):
             matrix[plane][row][col] = 1
             
     return matrix
+
+def turn_board_to_tensor(board:Board):
+    matrix = board_to_matrix(board)
+    X_tensor = torch.tensor(matrix, dtype=torch.float32).unsqueeze(0)
+    return X_tensor
+
+def get_legal_moves_mask(board: Board, move_map: dict, device: torch.device = None):
+    
+    mask = torch.zeros(len(move_map), dtype=torch.bool)
+    
+    for move in board.legal_moves:
+        move_uci = move.uci()
+        if move_uci in move_map:
+            move_idx = move_map[move_uci]
+            mask[move_idx] = True
+    
+    if device is not None:
+        mask = mask.to(device)
+    
+    return mask
+
+def apply_legal_moves_mask(policy_logits: torch.Tensor, legal_moves_mask: torch.Tensor):
+    
+    masked_logits = policy_logits.clone()
+    
+    if masked_logits.dim() == 1:
+        masked_logits[~legal_moves_mask] = float('-inf')
+    elif masked_logits.dim() == 2:
+        masked_logits[:, ~legal_moves_mask] = float('-inf')
+    else:
+        raise ValueError(f"Expected 1D or 2D tensor, got {masked_logits.dim()}D")
+    
+    return masked_logits
+
+def get_best_legal_move(board: Board, policy_logits: torch.Tensor, move_map: dict, 
+                        reverse_move_map: dict, device: torch.device = None, 
+                        temperature: float = 1.0):
+    
+    legal_mask = get_legal_moves_mask(board, move_map, device)
+    
+    masked_logits = apply_legal_moves_mask(policy_logits.squeeze(0), legal_mask)
+    
+    probabilities = torch.softmax(masked_logits / temperature, dim=0)
+    
+    move_idx = torch.multinomial(probabilities, 1).item()
+    
+    move_uci = reverse_move_map[move_idx]
+    move = chess.Move.from_uci(move_uci)
+    
+    return move, probabilities[move_idx].item()
+
+def compute_masked_policy_loss(pred_policy: torch.Tensor, target_move_indices: torch.Tensor, 
+                               boards: list, move_map: dict, device: torch.device = None):
+    
+    batch_size = pred_policy.shape[0]
+    total_loss = 0.0
+    
+    for i in range(batch_size):
+        legal_mask = get_legal_moves_mask(boards[i], move_map, device)
+        
+        masked_logits = apply_legal_moves_mask(pred_policy[i:i+1], legal_mask)
+        
+        masked_logits = masked_logits.squeeze(0)
+        
+        target_idx = target_move_indices[i]
+        
+        log_probs = torch.log_softmax(masked_logits, dim=0)
+        loss = -log_probs[target_idx]
+        
+        total_loss += loss
+    
+    return total_loss / batch_size

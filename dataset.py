@@ -5,7 +5,7 @@ import numpy as np
 import random
 
 class ChessPGNDataset(Dataset):
-    def __init__(self, pgn_file_path, move_map,  max_games=20000):
+    def __init__(self, pgn_file_path, move_map,  max_games=50000):
         self.move_map = move_map
         self.positions = [] 
         with open(pgn_file_path) as opened_file:
@@ -36,6 +36,7 @@ class ChessPGNDataset(Dataset):
         board = chess.Board(fen)
         
         current_value = result if turn == chess.WHITE else -result
+        original_board_fen = board.fen()
 
         if turn == chess.BLACK:
             board = board.mirror()
@@ -46,7 +47,7 @@ class ChessPGNDataset(Dataset):
         tensor = self.board_to_tensor(board)
         move_idx = self.move_map.get(move.uci(), 0)
         
-        return torch.from_numpy(tensor).float(), torch.tensor(move_idx, dtype=torch.long), torch.tensor(current_value, dtype=torch.float32).unsqueeze(0)
+        return torch.from_numpy(tensor).float(), torch.tensor(move_idx, dtype=torch.long), torch.tensor(current_value, dtype=torch.float32).unsqueeze(0), board.fen()
 
     def board_to_tensor(self, board):
         matrix = np.zeros((12, 8, 8), dtype=np.int8)
